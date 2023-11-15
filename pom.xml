@@ -7,7 +7,7 @@
   <version>1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
 
-  <name>Processing4.2</name>
+  <name>Processing4.3</name>
   <url>http://maven.apache.org</url>
 
   <properties>
@@ -28,7 +28,6 @@
       <artifactId>processing</artifactId>
       <version>4.3</version>
       <scope>system</scope>
-      <!--(path do processing)/processing-4.3/core/library/core.jar-->
       <systemPath>C:/Users/redkc/IdeaProjects/Processing4.2/processing-4.3/core/library/core.jar</systemPath> 
     </dependency>
   </dependencies>
