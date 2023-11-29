@@ -9,7 +9,7 @@ import static processing.core.PApplet.println;
 public class MyButton {
     private PApplet a;
     private int x, y, w, h;
-    private String text;
+    public String text;
     public Color buttonColor;
 
     MyButton(int tempX, int tempY, int tempW, int tempH,String tmpString, Color tmpColor, PApplet tempA) {
