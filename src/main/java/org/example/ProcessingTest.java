@@ -1,43 +1,24 @@
 package org.example;
 
-import org.w3c.dom.Text;
 import processing.core.*;
+import processing.data.JSONArray;
+import processing.data.JSONObject;
 
-import java.awt.*;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Vector;
 
 
 public class ProcessingTest extends PApplet {
+    Tank tank;
 
-    float[][] kernel = { { 0, 0, 0 },
-            { 0, 0, 0 },
-            { 0, 0, 0 } };
-    float[][] kernel2 = { { -1.0f/9.0f, 1.0f/9.0f, -1.0f/9.0f },
-            { 1.0f/9.0f, 1.0f/9.0f, 1.0f/9.0f },
-            { -1.0f/9.0f, 1.0f/9.0f, -1.0f/9.0f } };
-    
-    PImage img, filterImg;
-    MyButton load = new MyButton(50, 545, 40, 40,"Wczytaj", this);
-    MyButton save = new MyButton(5, 545, 40, 40, "Zapisz", this);
-
-    
-    
-    float startOfRect[] = {-1,-1};
-    float endOfRect[] = {-1,-1};
-    boolean isSelecting = false;
-    boolean isSelected = false;
-    boolean isImgLoaded = false;
-    
-    
-    MyButton filters[] = {
-            new MyButton(100, 545, 40, 40, "Przywróć", this),
-            new MyButton(145, 545, 40, 40, "2", this),
-            new MyButton(190, 545, 40, 40, "3", this),
-            new MyButton(235, 545, 40, 40, "4", this)
-    };
+    float lastTime = 0;
+    float delta = 0;
+    float cd = 0;
+    float highScore = 0;
+    public ArrayList<Bullet> bullets;
+    public ArrayList<Enemy> enemies;
     
     public void settings() {
         size(600, 600);
@@ -45,199 +26,173 @@ public class ProcessingTest extends PApplet {
 
     public void setup() {
         background(255);
+
+        try {
+            mySetUp();
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+
     }
+    
+    public void mySetUp() throws FileNotFoundException {
+        File f = new File("C:\\Users\\redkc\\IdeaProjects\\Processing4.2\\saveState.json");
+        if(f.exists() && !f.isDirectory()) {
+            FileReader fileReader = new FileReader(f);
+            JSONObject saveState = new JSONObject(fileReader);
+            JSONObject savedtank = saveState.getJSONObject("tank");
+            tank = new Tank(savedtank.getFloat("x"),savedtank.getFloat("y"),savedtank.getFloat("rotation"),loadShape("C:\\Users\\redkc\\IdeaProjects\\Processing4.2\\src\\main\\java\\org\\example\\SVG\\Tank.svg"),this);
+            
+            
+            bullets = new ArrayList<Bullet>();
+            JSONArray bulletsArray = saveState.getJSONArray("bulletArray");
+            for (int i = 0; i < bulletsArray.size(); i++) {
+                JSONObject jsonBullet = bulletsArray.getJSONObject(i);
+                bullets.add(new Bullet(jsonBullet.getFloat("x"),jsonBullet.getFloat("y"),jsonBullet.getFloat("rotation"),loadShape("C:\\Users\\redkc\\IdeaProjects\\Processing4.2\\src\\main\\java\\org\\example\\SVG\\Bullet.svg"),this));
+            }
+            
+            enemies = new ArrayList<Enemy>();
+            JSONArray enemiesArray = saveState.getJSONArray("enemyArray");
+            for (int i = 0; i < enemiesArray.size(); i++) {
+                JSONObject jsonEnemy = enemiesArray.getJSONObject(i);
+                enemies.add(new Enemy(jsonEnemy.getFloat("x"),jsonEnemy.getFloat("y"),loadShape("C:\\Users\\redkc\\IdeaProjects\\Processing4.2\\src\\main\\java\\org\\example\\SVG\\Enemy.svg"),this));
+            }
+            
+            highScore = saveState.getFloat("highScore");
+        }else {
+            tank = new Tank(height/2,width/2,0,loadShape("C:\\Users\\redkc\\IdeaProjects\\Processing4.2\\src\\main\\java\\org\\example\\SVG\\Tank.svg"),this);
+            bullets = new ArrayList<Bullet>();
+            enemies = new ArrayList<Enemy>();
+            highScore = 0;
+        }
+        prepareExitHandler();
+    }
+    
+
+    public void mouseReleased(){
+        tank.shape.getChild("Laser").setVisible(false);
+    } 
     
     public void mousePressed() {
-        if(save.inside(mouseX,mouseY)) {
-            selectOutput("Select a file to write to:", "fileSaveSelected",null,this);
-        }
-        if(load.inside(mouseX,mouseY)) {
-            selectInput("Select a file to process:", "fileLoadSelected",null,this);
-        }
-        if(isImgLoaded) {
-            for (MyButton filter : filters) {
-                if(filter.inside(mouseX, mouseY)) {
-                    if (filter.text == "Przywróć") {
-                        filterImg = img;
-                    }
-                    if (filter.text == "2") {
-                        print("Filter applied!");
-                        filterImage(kernel);
-                    }
-                    if (filter.text == "3") {
-                        filterImage(kernel2);
-                    }
-                    if (filter.text == "4") {
-                        filterImagePaserize();
-                    }
-                }
+        bullets.add(new Bullet(tank.x,tank.y,tank.rotation,loadShape("C:\\Users\\redkc\\IdeaProjects\\Processing4.2\\src\\main\\java\\org\\example\\SVG\\Bullet.svg"),this));
+        tank.shape.getChild("Laser").setVisible(true);
+    }
+    private void prepareExitHandler () {
+
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+
+            public void run () {
+
+                System.out.println("Saving to file");
+                myStop();
+
             }
-        }
+
+        }));
+
+    }    
+    public void myStop() {
+        JSONObject saveState = new JSONObject();
+
+        saveState.put("highScore",highScore);
         
-        if(mouseY < height - height/9) {
-            isSelecting = true;
-            isSelected = false;
-            startOfRect[0] = mouseX;
-            startOfRect[1] = mouseY;
-            endOfRect[0] = mouseX;
-            endOfRect[1] = mouseY;
-        }
-    }
-
-    public void mouseDragged() {
-        if (mouseY < height - height / 9) {
-            endOfRect[0] = mouseX;
-            endOfRect[1] = mouseY;
-        }else {
-            isSelecting = false;
-        }
-    }
-
-    public void mouseReleased() {
-       if(isSelecting) {
-           isSelecting = false;
-           isSelected = true;
-           endOfRect[0] = mouseX;
-           endOfRect[1] = mouseY;
-       }
-    }
-    
-    void filterImage(float[][] kernel){
-        filterImg = createImage(img.width, img.height, RGB);
-        float screenToImagePixelsWidth = (float) img.width/ width ;
-        float screenToImagePixelsHeight = (float) img.height/(height - (float) height / 9);
+        JSONObject jsonTank = new JSONObject();
+        jsonTank.put("x",tank.x);
+        jsonTank.put("y",tank.y);
+        jsonTank.put("rotation",tank.rotation);
+        saveState.put("tank",jsonTank);
         
-        print(screenToImagePixelsWidth);
-        print(screenToImagePixelsHeight);
         
-        if(startOfRect[0] > endOfRect[0] ) {
-            float tmp = endOfRect[0];
-            endOfRect[0] = startOfRect[0];
-            startOfRect[0] = tmp;
+        JSONArray bulletArray = new JSONArray();
+        for (Bullet bullet: bullets) {
+            JSONObject jObj = new JSONObject();
+            jObj.put("x",bullet.x);
+            jObj.put("y",bullet.y);
+            jObj.put("rotation",bullet.rotation);
+            bulletArray.append(jObj);
         }
+        saveState.put("bulletArray",bulletArray);
+        
+        JSONArray enemyArray = new JSONArray();
+        for (Enemy enemy: enemies) {
+            JSONObject jObj = new JSONObject();
+            jObj.put("x",enemy.x);
+            jObj.put("y",enemy.y);
+            jObj.put("cd",enemy.cd);
+            enemyArray.append(jObj);
+        }
+        saveState.put("enemyArray",enemyArray);
 
-        if(startOfRect[1] > endOfRect[1] ) {
-            float tmp = endOfRect[1];
-            endOfRect[1] = startOfRect[1];
-            startOfRect[1] = tmp;
-        }
-        
-        for (int y = 1; y < img.height-1; y++) {
-            for (int x = 1; x < img.width-1; x++) {
-                //print("-------------------------------------------------------------------------\n");
-                //print(x,startOfRect[0] * screenToImagePixelsWidth,endOfRect[0] * screenToImagePixelsWidth,"\n");
-                //print(y,startOfRect[1] * screenToImagePixelsHeight,endOfRect[1] * screenToImagePixelsHeight,"\n");
-                if((x > (startOfRect[0] * screenToImagePixelsWidth) && x < (endOfRect[0] * screenToImagePixelsWidth)) && (y > (startOfRect[1] * screenToImagePixelsHeight) && y < (endOfRect[1] * screenToImagePixelsHeight))) {
-                    float sumRed = 0;
-                    float sumGreen = 0;
-                    float sumBlue = 0;
-                    for (int ky = -1; ky <= 1; ky++) {
-                        for (int kx = -1; kx <= 1; kx++) {
-                            int pos = (y + ky)*img.width + (x + kx);
-                            sumRed += kernel[ky+1][kx+1] * red(img.pixels[pos]);
-                            sumGreen += kernel[ky+1][kx+1] * green(img.pixels[pos]);
-                            sumBlue += kernel[ky+1][kx+1] * blue(img.pixels[pos]);
-                        }
-                    }
-                    filterImg.pixels[y*filterImg.width + x] = color(sumRed, sumGreen, sumBlue);
-                }else {
-                    filterImg.pixels[y*filterImg.width + x] = img.pixels[y*filterImg.width + x];
-                }
-            }
-        }
-        print("Finish!!");
-        filterImg.updatePixels();
+        saveJSONObject(saveState, "C:\\Users\\redkc\\IdeaProjects\\Processing4.2\\saveState.json");
     }
 
-    void filterImagePaserize(){
-        filterImg = img;
-        float screenToImagePixelsWidth = (float) img.width/ width ;
-        float screenToImagePixelsHeight = (float) img.height/(height - (float) height / 9);
-
-        print(screenToImagePixelsWidth);
-        print(screenToImagePixelsHeight);
-
-        if(startOfRect[0] > endOfRect[0] ) {
-            float tmp = endOfRect[0];
-            endOfRect[0] = startOfRect[0];
-            startOfRect[0] = tmp;
-        }
-
-        if(startOfRect[1] > endOfRect[1] ) {
-            float tmp = endOfRect[1];
-            endOfRect[1] = startOfRect[1];
-            startOfRect[1] = tmp;
-        }
-        PImage newImage = createImage(img.width, img.height, RGB);
-        filterImg.filter(POSTERIZE, 4);
-        filterImg.updatePixels();
-        img.loadPixels();
-        
-        for (int y = 1; y < img.height-1; y++) {
-            for (int x = 1; x < img.width-1; x++) {
-                if((x > (startOfRect[0] * screenToImagePixelsWidth) && x < (endOfRect[0] * screenToImagePixelsWidth)) && (y > (startOfRect[1] * screenToImagePixelsHeight) && y < (endOfRect[1] * screenToImagePixelsHeight))) {
-                    newImage.pixels[y*newImage.width + x] = filterImg.pixels[y*filterImg.width + x];
-                }else {
-                    newImage.pixels[y*newImage.width + x] = img.pixels[y*img.width + x];
-                }
-            }
-        }
-        
-        img.updatePixels();
-        print("Finish!!");
-        newImage.updatePixels();
-        filterImg.filter(NORMAL);
-        filterImg = newImage;
-    }
-    public void fileSaveSelected(File selection) {
-        if (selection == null) {
-            println("Window was closed or the user hit cancel.");
-        } else {
-            filterImg.save(selection.getAbsolutePath());
-        }
-    }
-
-    public void fileLoadSelected(File selection) {
-        if (selection == null) {
-            println("Window was closed or the user hit cancel.");
-        } else {
-            img = loadImage( selection.getAbsolutePath());
-            img.loadPixels();
-            filterImg = img;
-            isImgLoaded = true;
-        }
-    }
-    
+    // Draw the shapes and handle input in draw():
     public void draw() {
-        background(255);
-        strokeWeight(2);
-        stroke(0);
-        fill(255);
-        rect(0, height - height/9, width, 110);
+        delta = millis()/1000f - lastTime;
+        lastTime =  millis()/1000f;
+        background(200);
+        textSize(16);
+        text("Highscore: " + highScore, 0,  16);
 
-        for (MyButton filter : filters) {
-            filter.display();
-        }
-        load.display();
-        save.display();
+        // Draw tank rotated toward mouse
+        
+       tank.display();
 
-        if(isImgLoaded) {
-            image(filterImg,0,0,width,height - height/9);
+        ArrayList<Enemy> enemiesIndexes = new ArrayList<Enemy>();
+        ArrayList<Bullet> bulletsIndexes = new ArrayList<Bullet>();
+
+        for (int j = 0; j < enemies.size(); j++) {
+            enemies.get(j).display(tank, delta);
+            if (Math.abs(enemies.get(j).x - tank.x) < 5 && Math.abs(enemies.get(j).y - tank.y) < 5) {
+                try {
+                    File f = new File("C:\\Users\\redkc\\IdeaProjects\\Processing4.2\\saveState.json");
+                    if(f.exists() && !f.isDirectory()) {
+                        f.delete();
+                    }
+                    mySetUp();
+                } catch (FileNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
+            }
         }
         
-        stroke(2);
-        strokeWeight(2);
-        noFill();
-        rectMode(CORNERS);
-        if(isSelecting) {
-            rect(startOfRect[0], startOfRect[1], endOfRect[0], endOfRect[1]);
-        }else if (isSelected ) {
-            rect(startOfRect[0], startOfRect[1], endOfRect[0], endOfRect[1]);
+        for (int i = 0; i < bullets.size(); i++) {
+            bullets.get(i).display(delta);
+            for (int j = 0; j < enemies.size(); j++) {
+                if(Math.abs(bullets.get(i).x - enemies.get(j).x) < 10 &&  Math.abs(bullets.get(i).y - enemies.get(j).y) < 10) {
+                    bullets.get(i).shape.getChild("Explosion").setVisible(true);
+                    bulletsIndexes.add(bullets.get(i));
+                    enemiesIndexes.add(enemies.get(j));
+                }
+            }
+            if(bullets.get(i).lifeTime > 100) {
+                bulletsIndexes.add(bullets.get(i));
+            }
         }
-        rectMode(CORNER);
+
+        for (Bullet bullet : bulletsIndexes) {
+            bullets.remove(bullet);
+        }
+
+        for (Enemy enemy : enemiesIndexes) {
+            enemies.remove(enemy);
+            highScore += 5;
+            
+        }
         
+        cd += delta;
+        if(cd > 2){
+            cd = 0;
+            enemies.add(new Enemy(0,this.random(0,height),loadShape("C:\\Users\\redkc\\IdeaProjects\\Processing4.2\\src\\main\\java\\org\\example\\SVG\\Enemy.svg"),this));
+        }
+        
+        // Draw bullet and enemy without rotation
+       // shape(bullet, mouseX - 35, mouseY - 35);
+       // shape(enemy, mouseX + 35, mouseY + 35);
+
+        // Check for WASD input
+       
     }
-
     public static void main(String... args) {
         PApplet.main(new String[]{"org.example.ProcessingTest"});
     }
